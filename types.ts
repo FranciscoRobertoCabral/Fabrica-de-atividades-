@@ -20,4 +20,11 @@ export interface ActivityData {
   title: string;
   instruction: string;
   content: string;
+  imagePrompt: string;
+  imageData?: string;
+}
+
+export interface ActivityPack {
+  collectionName: string; // Nome criativo gerado para o conjunto de atividades
+  activities: ActivityData[];
 }
