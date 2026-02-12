@@ -2,16 +2,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ActivityConfig, ActivityData, ActivityPack } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 async function generateImage(prompt: string): Promise<string | undefined> {
+  // Inicializa dentro da função para garantir que usa a chave de ambiente mais recente
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
           {
-            text: `Simple black and white line art for kids coloring book, white background, thick clean lines, no shading, pedagogical illustration of: ${prompt}`,
+            text: `High contrast black and white line art, cartoon style for children coloring book. White background. Clear thick black outlines only. No colors, no gray shades. Object: ${prompt}`,
           },
         ],
       },
@@ -22,9 +23,11 @@ async function generateImage(prompt: string): Promise<string | undefined> {
       }
     });
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
       }
     }
   } catch (error) {
@@ -34,11 +37,13 @@ async function generateImage(prompt: string): Promise<string | undefined> {
 }
 
 export const suggestActivityNames = async (config: ActivityConfig): Promise<string[]> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   const prompt = `Como um especialista em educação lúdica e branding pedagógico, sugira EXATAMENTE 5 nomes curtos, criativos e cativantes para um caderno de atividades.
     Nível: ${config.level}
     Tipo: ${config.type}
     Tema: ${config.theme}
-    Regras: Os nomes devem ser em Português, variados entre si (ex: um focado em aventura, outro em descoberta, outro em magia) e adequados para a idade selecionada.`;
+    Regras: Os nomes devem ser em Português, variados entre si e adequados para a idade selecionada.`;
 
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
@@ -55,7 +60,7 @@ export const suggestActivityNames = async (config: ActivityConfig): Promise<stri
 
   try {
     const names = JSON.parse(response.text || "[]");
-    return names.slice(0, 5); // Garante que temos no máximo 5
+    return Array.isArray(names) ? names.slice(0, 5) : [];
   } catch (e) {
     return [
       `Aventura: ${config.theme}`, 
@@ -72,6 +77,7 @@ export const generateActivities = async (
   chosenName: string,
   onProgress?: (msg: string) => void
 ): Promise<ActivityPack> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   if (onProgress) onProgress("Organizando o plano de aula...");
 
