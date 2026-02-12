@@ -3,24 +3,14 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { ActivityConfig, ActivityData, ActivityPack } from "../types";
 
 async function generateImage(prompt: string): Promise<string | undefined> {
-  // Inicializa dentro da função para garantir que usa a chave de ambiente mais recente
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
-        parts: [
-          {
-            text: `High contrast black and white line art, cartoon style for children coloring book. White background. Clear thick black outlines only. No colors, no gray shades. Object: ${prompt}`,
-          },
-        ],
+        parts: [{ text: `High contrast black and white line art, children coloring book style. White background. Clear thick black outlines. No gray, no colors. Subject: ${prompt}` }],
       },
-      config: {
-        imageConfig: {
-          aspectRatio: "1:1"
-        }
-      }
+      config: { imageConfig: { aspectRatio: "1:1" } }
     });
 
     if (response.candidates?.[0]?.content?.parts) {
@@ -31,64 +21,28 @@ async function generateImage(prompt: string): Promise<string | undefined> {
       }
     }
   } catch (error) {
-    console.error("Erro ao gerar imagem:", error);
+    console.error("Erro na imagem:", error);
   }
   return undefined;
 }
 
-export const suggestActivityNames = async (config: ActivityConfig): Promise<string[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  const prompt = `Como um especialista em educação lúdica e branding pedagógico, sugira EXATAMENTE 5 nomes curtos, criativos e cativantes para um caderno de atividades.
-    Nível: ${config.level}
-    Tipo: ${config.type}
-    Tema: ${config.theme}
-    Regras: Os nomes devem ser em Português, variados entre si e adequados para a idade selecionada.`;
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: { type: Type.STRING },
-        description: "Lista com exatamente 5 nomes sugeridos"
-      },
-    },
-  });
-
-  try {
-    const names = JSON.parse(response.text || "[]");
-    return Array.isArray(names) ? names.slice(0, 5) : [];
-  } catch (e) {
-    return [
-      `Aventura: ${config.theme}`, 
-      `Explorando o Mundo: ${config.theme}`,
-      `O Reino de ${config.theme}`,
-      `Pequenos Gênios: ${config.theme}`,
-      `Magia do Saber: ${config.theme}`
-    ];
-  }
-};
-
 export const generateActivities = async (
   config: ActivityConfig, 
-  chosenName: string,
   onProgress?: (msg: string) => void
 ): Promise<ActivityPack> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  if (onProgress) onProgress("Organizando o plano de aula...");
+  if (onProgress) onProgress("Criando roteiro pedagógico...");
 
-  const textPrompt = `Você é um especialista em educação infantil e anos iniciais (BNCC). 
-    Gere um pacote de atividades pedagógicas chamado "${chosenName}".
+  const textPrompt = `Aja como um especialista em pedagogia infantil (BNCC). 
+    Gere um pacote completo de atividades.
     Nível: "${config.level}"
     Tipo: "${config.type}"
     Tema: "${config.theme}"
+    Quantidade: ${config.pages} páginas.
     
-    O pacote deve conter exatamente ${config.pages} atividades.
-    Cada atividade individual deve ter um título único, instrução clara e um "imagePrompt" em inglês para uma ilustração simples de colorir.`;
+    Crie um nome criativo para o caderno no campo 'collectionName'. 
+    Para cada atividade, forneça título, instrução, conteúdo e um imagePrompt (em inglês) para o desenho.`;
 
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
@@ -118,16 +72,20 @@ export const generateActivities = async (
     },
   });
 
+  let text = response.text || "{}";
+  // Limpeza de possíveis wrappers de markdown que a IA possa enviar mesmo em modo JSON
+  text = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+  
   let pack: ActivityPack;
   try {
-    pack = JSON.parse(response.text || "{}");
-    pack.collectionName = chosenName;
+    pack = JSON.parse(text);
   } catch (error) {
-    throw new Error("Falha ao processar o plano das atividades.");
+    console.error("Erro ao parsear JSON:", text);
+    throw new Error("Resposta da IA inválida.");
   }
 
   for (let i = 0; i < pack.activities.length; i++) {
-    if (onProgress) onProgress(`Criando desenho ${i + 1} de ${pack.activities.length}...`);
+    if (onProgress) onProgress(`Ilustrando atividade ${i + 1} de ${pack.activities.length}...`);
     const imageData = await generateImage(pack.activities[i].imagePrompt);
     pack.activities[i].imageData = imageData;
   }
